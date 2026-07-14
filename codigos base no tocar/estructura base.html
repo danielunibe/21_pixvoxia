@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>iPhone 14 Pro Max - Precision Canvas (React Standalone)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM (Development) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel para compilar JSX en el navegador -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { margin: 0; background-color: #0a0a0a; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect, useCallback } = React;
+
+        // --- CONFIGURACIÓN DE DATOS INICIALES ---
+        const INITIAL_LEFT_BOXES = ['1', '2', '3'];
+        const INITIAL_RIGHT_BOXES = ['4', '5', '6'];
+
+        const generateRingData = (prefix, startToolNum) => [
+            { a: -100, id: `${prefix}1`, content: `T${startToolNum}` },
+            { a: -75,  id: `${prefix}2`, content: `T${startToolNum + 1}` },
+            { a: -50,  id: `${prefix}3`, content: `T${startToolNum + 2}` },
+            { a: -25,  id: `${prefix}4`, content: `T${startToolNum + 3}` },
+            { a: 0,    id: `${prefix}0`, content: '' }, 
+            { a: 25,   id: `${prefix}5`, content: `T${startToolNum + 4}` },
+            { a: 50,   id: `${prefix}6`, content: `T${startToolNum + 5}` },
+            { a: 75,   id: `${prefix}7`, content: `T${startToolNum + 6}` },
+            { a: 100,  id: `${prefix}8`, content: `T${startToolNum + 7}` },
+        ];
+
+        const INITIAL_LEFT_RING = generateRingData('L', 1);
+
+        // Paleta de colores ampliada: 20 swatches (4 columnas x 5 filas)
+        const COLORS = [
+            '#000000', '#333333', '#ffffff', '#ef4444', '#3b82f6', // Columna 1: Base + Primarios
+            '#f97316', '#eab308', '#84cc16', '#22c55e', '#10b981', // Columna 2: Secundarios + Verdes
+            '#14b8a6', '#06b6d4', '#0ea5e9', '#6366f1', '#8b5cf6', // Columna 3: Cianes + Índigos
+            '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#fb7185'  // Columna 4: Púrpuras + Rosas
+        ];
+
+        // --- COMPONENTE THUMB ZONE (IZQUIERDA - ANILLO) ---
+        const ThumbZoneLeft = ({ initialBoxes, initialRing }) => {
+            const [boxes, setBoxes] = useState(initialBoxes);
+            const [ringItems, setRingItems] = useState(initialRing);
+            const [swappingIdx, setSwappingIdx] = useState(null);
+            const [held, setHeld] = useState(false);
+            const [liveContent, setLiveContent] = useState('');
+            const [flash, setFlash] = useState(false);
+            const [isReturning, setIsReturning] = useState(false);
+
+            const zoneRef = useRef(null);
+            const boxRefs = useRef([]);
+            const trackRef = useRef({ isTracking: false, startY: 0, lastSnap: 0, originalContent: '', selectedId: '' });
+
+            const applyRingOpacities = useCallback((snapAngle) => {
+                if (!zoneRef.current) return;
+                const items = zoneRef.current.querySelectorAll('.ring-item');
+                items.forEach(item => {
+                    const itemAngle = parseFloat(item.dataset.angle);
+                    const absDistance = Math.abs(itemAngle + snapAngle);
+                    let op = 0;
+                    if (absDistance === 0) op = 0; 
+                    else if (absDistance === 25) op = 0.8;
+                    else if (absDistance === 50) op = 0.5;
+                    else if (absDistance === 75) op = 0.25;
+                    else if (absDistance >= 100) op = 0.1;
+                    item.style.opacity = op;
+                });
+            }, []);
+
+            const handlePointerDown = (e, index) => {
+                if (swappingIdx !== null) return;
+                if (index === 1) {
+                    e.target.setPointerCapture(e.pointerId);
+                    setHeld(true);
+                    setLiveContent(boxes[1]);
+                    trackRef.current = { isTracking: true, startY: e.clientY, lastSnap: 0, originalContent: boxes[1], selectedId: '' };
+                    zoneRef.current.style.setProperty('--ring-rot', `0deg`);
+                    applyRingOpacities(0);
+                    setRingItems(prev => prev.map(item => item.a === 0 ? { ...item, content: boxes[1] } : item));
+                } else {
+                    setSwappingIdx(index);
+                    setTimeout(() => {
+                        setBoxes(prev => {
+                            const next = [...prev];
+                            const temp = next[1];
+                            next[1] = next[index];
+                            next[index] = temp;
+                            return next;
+                        });
+                        setSwappingIdx(null);
+                    }, 200);
+                }
+            };
+
+            const handlePointerMove = (e, index) => {
+                if (index !== 1 || !trackRef.current.isTracking) return;
+                const deltaY = e.clientY - trackRef.current.startY;
+                
+                if (Math.abs(deltaY) > 10) {
+                    zoneRef.current.classList.add('show-ring');
+                    let rawRot = deltaY * 0.8;
+                    let snapAngle = Math.round(rawRot / 25) * 25;
+                    snapAngle = Math.max(-100, Math.min(100, snapAngle));
+
+                    if (trackRef.current.lastSnap !== snapAngle) {
+                        trackRef.current.lastSnap = snapAngle;
+                        zoneRef.current.style.setProperty('--ring-rot', `${snapAngle}deg`);
+
+                        const targetAngle = -snapAngle;
+                        const targetItem = ringItems.find(r => r.a === targetAngle);
+                        if (targetItem) {
+                            setLiveContent(targetItem.content);
+                            trackRef.current.selectedId = targetItem.id;
+                        }
+
+                        if (boxRefs.current[1]) {
+                            boxRefs.current[1].style.setProperty('--held-scale', '1.15');
+                            if(navigator.vibrate) navigator.vibrate(10);
+                            setTimeout(() => {
+                                if(boxRefs.current[1]) boxRefs.current[1].style.setProperty('--held-scale', '1');
+                            }, 150);
+                        }
+                        applyRingOpacities(snapAngle);
+                    }
+                }
+            };
+
+            const handlePointerUp = (e, index) => {
+                if (index !== 1 || !trackRef.current.isTracking) return;
+                const finalSnap = trackRef.current.lastSnap;
+                const originalContent = trackRef.current.originalContent;
+                const selectedId = trackRef.current.selectedId;
+
+                if (finalSnap !== 0 && selectedId && !selectedId.endsWith('0')) {
+                    setBoxes(prev => {
+                        const next = [...prev];
+                        next[1] = ringItems.find(r => r.id === selectedId).content;
+                        return next;
+                    });
+                    setRingItems(prev => prev.map(item => 
+                        item.id === selectedId ? { ...item, content: originalContent } : 
+                        item.a === 0 ? { ...item, content: '' } : item
+                    ));
+                    setFlash(true);
+                    setTimeout(() => setFlash(false), 100);
+                } else {
+                    setRingItems(prev => prev.map(item => item.a === 0 ? { ...item, content: '' } : item));
+                }
+
+                setHeld(false);
+                setIsReturning(true);
+                setTimeout(() => setIsReturning(false), 500);
+
+                setLiveContent('');
+                if (zoneRef.current) {
+                    zoneRef.current.classList.remove('show-ring');
+                    zoneRef.current.style.setProperty('--ring-rot', `0deg`);
+                }
+                if (boxRefs.current[1]) boxRefs.current[1].style.setProperty('--held-scale', '1');
+                
+                trackRef.current.isTracking = false;
+                try { e.target.releasePointerCapture(e.pointerId); } catch(err) {}
+            };
+
+            return (
+                <div ref={zoneRef} className="thumb-zone thumb-left">
+                    {boxes.map((content, idx) => {
+                        const isSwapping = swappingIdx === idx;
+                        const isCenterSwapping = swappingIdx !== null && idx === 1;
+                        const dist = '60px';
+                        let transformClass = '';
+                        if (isSwapping) transformClass = idx === 0 ? `translateY(${dist})` : `translateY(-${dist})`;
+                        if (isCenterSwapping) transformClass = swappingIdx === 0 ? `translateY(-${dist})` : `translateY(${dist})`;
+                        const isHeldVisual = held && idx === 1;
+
+                        return (
+                            <div
+                                key={idx}
+                                ref={el => boxRefs.current[idx] = el}
+                                className={`thumb-box ${isHeldVisual ? 'is-held' : ''} ${isReturning && idx === 1 ? 'is-returning' : ''} ${flash && idx === 1 ? 'swap-flash' : ''}`}
+                                style={{ transform: transformClass ? transformClass : undefined }}
+                                onPointerDown={(e) => handlePointerDown(e, idx)}
+                                onPointerMove={(e) => handlePointerMove(e, idx)}
+                                onPointerUp={(e) => handlePointerUp(e, idx)}
+                                onPointerCancel={(e) => handlePointerUp(e, idx)}
+                            >
+                                <span className="box-num">{isHeldVisual ? liveContent : content}</span>
+                            </div>
+                        );
+                    })}
+                    <div className="tool-ring">
+                        {ringItems.map((item) => (
+                            <div key={item.id} className="ring-item" style={{ '--a': `${item.a}deg` }} data-angle={item.a} data-id={item.id}>
+                                <span className="box-num">{item.content}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- COMPONENTE THUMB ZONE (DERECHA - PALETA & HISTORIAL) ---
+        const ThumbZoneRight = ({ initialBoxes }) => {
+            const [heldIdx, setHeldIdx] = useState(null);
+            const [expanded, setExpanded] = useState(false);
+            const [actionFeedback, setActionFeedback] = useState(null); 
+            const [hoveredColorIdx, setHoveredColorIdx] = useState(null);
+            const [isReturning, setIsReturning] = useState(false);
+
+            const expandTimeout = useRef(null);
+            const trackRef = useRef({ isTracking: false, startX: 0, startY: 0, triggered: false });
+            const hoverRef = useRef(null);
+
+            const triggerHistoryAction = (type, el) => {
+                trackRef.current.triggered = true;
+                setActionFeedback(type === 'UNDO' ? '↺' : '↻');
+                
+                if (navigator.vibrate) navigator.vibrate([15, 30, 15]); 
+                console.log(`Acción Historial Ejecutada: ${type}`);
+
+                el.style.setProperty('--drag-x', type === 'UNDO' ? '-20px' : '20px');
+                setTimeout(() => setActionFeedback(null), 600);
+            };
+
+            const handlePointerDown = (e, index) => {
+                e.target.setPointerCapture(e.pointerId);
+                setHeldIdx(index);
+                
+                if (index === 1) {
+                    trackRef.current = { isTracking: true, startX: e.clientX, startY: e.clientY, triggered: false };
+                    expandTimeout.current = setTimeout(() => {
+                        setExpanded(true);
+                        if(navigator.vibrate) navigator.vibrate(15);
+                    }, 200);
+                } else if (index === 2) {
+                    trackRef.current = { isTracking: true, startX: e.clientX, startY: e.clientY, triggered: false };
+                    e.target.style.setProperty('--drag-x', '0px');
+                }
+            };
+
+            const handlePointerMove = (e, index) => {
+                if (index === 2 && trackRef.current.isTracking && !trackRef.current.triggered) {
+                    const deltaX = e.clientX - trackRef.current.startX;
+                    e.target.style.setProperty('--drag-x', `${deltaX}px`);
+
+                    if (deltaX < -45) triggerHistoryAction('UNDO', e.target);
+                    else if (deltaX > 30) triggerHistoryAction('REDO', e.target);
+                }
+                else if (index === 1 && expanded && trackRef.current.isTracking) {
+                    const deltaX = e.clientX - trackRef.current.startX;
+                    const deltaY = e.clientY - trackRef.current.startY;
+                    
+                    // ACTUALIZACIÓN O(1): Mapeo para matriz 4x5
+                    // Eje X: 4 columnas (0 a 3). Cursor inicia lógicamente en la columna derecha (3).
+                    let col = 3 - Math.floor(Math.abs(Math.min(0, deltaX)) / 22);
+                    col = Math.max(0, Math.min(3, col)); 
+                    
+                    // Eje Y: 5 filas (0 a 4). Cursor inicia en el centro vertical (fila 2).
+                    let row = 2 + Math.round(deltaY / 14);
+                    row = Math.max(0, Math.min(4, row)); 
+                    
+                    // Índice real = (columna * cantidad_filas) + fila
+                    const cIdx = (col * 5) + row;
+
+                    if (hoverRef.current !== cIdx) {
+                        hoverRef.current = cIdx;
+                        setHoveredColorIdx(cIdx);
+                        if(navigator.vibrate) navigator.vibrate(10);
+                    }
+                }
+            };
+
+            const handlePointerUp = (e, index) => {
+                clearTimeout(expandTimeout.current);
+                
+                if (index === 1 && expanded && hoverRef.current !== null) {
+                    console.log(`Color Seleccionado a Distancia: ${COLORS[hoverRef.current]}`);
+                    if(navigator.vibrate) navigator.vibrate([10, 10]);
+                }
+
+                setExpanded(false);
+                setHeldIdx(null);
+                setHoveredColorIdx(null);
+                hoverRef.current = null;
+                trackRef.current.isTracking = false;
+
+                setIsReturning(true);
+                setTimeout(() => setIsReturning(false), 500);
+                
+                if (index === 2) {
+                    e.target.style.removeProperty('--drag-x'); 
+                }
+                
+                try { e.target.releasePointerCapture(e.pointerId); } catch(err) {}
+            };
+
+            return (
+                <div className="thumb-zone thumb-right">
+                    {initialBoxes.map((content, idx) => {
+                        const isHeldVisual = heldIdx === idx;
+                        const isActionDrag = isHeldVisual && idx === 2;
+
+                        return (
+                            <div
+                                key={idx}
+                                className={`thumb-box ${isHeldVisual ? 'is-held' : ''} ${isReturning && (idx === 1 || idx === 2) ? 'is-returning' : ''} ${isHeldVisual && expanded && idx === 1 ? 'is-color-mode' : ''} ${isActionDrag ? 'is-action-drag' : ''}`}
+                                onPointerDown={(e) => handlePointerDown(e, idx)}
+                                onPointerMove={(e) => handlePointerMove(e, idx)}
+                                onPointerUp={(e) => handlePointerUp(e, idx)}
+                                onPointerCancel={(e) => handlePointerUp(e, idx)}
+                            >
+                                {idx === 1 ? (
+                                    <div className={`color-panel ${expanded ? 'is-expanded' : ''}`}>
+                                        {!expanded && <span className="box-num">{content}</span>}
+                                        {expanded && COLORS.map((color, i) => (
+                                            <div 
+                                                key={i} 
+                                                className={`color-swatch ${hoveredColorIdx === i ? 'is-hovered' : ''}`} 
+                                                style={{ '--swatch': color }} 
+                                            />
+                                        ))}
+                                    </div>
+                                ) : idx === 2 ? (
+                                    <span className="box-num" style={{ fontSize: actionFeedback ? '24px' : '18px' }}>
+                                        {actionFeedback || content}
+                                    </span>
+                                ) : (
+                                    <span className="box-num">{content}</span>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        };
+
+        // --- COMPONENTE PRINCIPAL ---
+        function App() {
+            const screenRef = useRef(null);
+            const canvasRef = useRef(null);
+            
+            const panState = useRef({
+                zoom: 1, offsetX: 0, offsetY: 0, isDragging: false, startX: 0, startY: 0
+            });
+
+            const updateGrid = useCallback(() => {
+                if (!canvasRef.current) return;
+                const { zoom, offsetX, offsetY } = panState.current;
+                canvasRef.current.style.setProperty('--zoom', zoom);
+                canvasRef.current.style.setProperty('--offset-x', `${offsetX}px`);
+                canvasRef.current.style.setProperty('--offset-y', `${offsetY}px`);
+            }, []);
+
+            useEffect(() => {
+                const screenEl = screenRef.current;
+                if (!screenEl) return;
+
+                const isUIElement = (e) => e.target.closest('.dynamic-island') || e.target.closest('.thumb-zone') || e.target.closest('.top-zone') || e.target.closest('.bottom-dock');
+
+                const handleMouseDown = (e) => {
+                    if (isUIElement(e)) return;
+                    panState.current.isDragging = true;
+                    panState.current.startX = e.clientX;
+                    panState.current.startY = e.clientY;
+                    if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
+                };
+
+                const handleMouseMove = (e) => {
+                    if (!panState.current.isDragging) return;
+                    const deviceEl = document.getElementById('device-wrapper');
+                    const hwScale = deviceEl ? parseFloat(deviceEl.style.transform.replace(/[^\d.]/g, '') || 1) : 1;
+                    panState.current.offsetX += (e.clientX - panState.current.startX) / hwScale;
+                    panState.current.offsetY += (e.clientY - panState.current.startY) / hwScale;
+                    panState.current.startX = e.clientX;
+                    panState.current.startY = e.clientY;
+                    updateGrid();
+                };
+
+                const handleMouseUp = () => {
+                    panState.current.isDragging = false;
+                    if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+                };
+
+                const handleWheel = (e) => {
+                    if (isUIElement(e)) return;
+                    e.preventDefault();
+                    const deviceEl = document.getElementById('device-wrapper');
+                    const hwScale = deviceEl ? parseFloat(deviceEl.style.transform.replace(/[^\d.]/g, '') || 1) : 1;
+                    const zoomSensitivity = 0.002;
+                    const zoomDelta = -e.deltaY * zoomSensitivity;
+                    const prevZoom = panState.current.zoom;
+                    let newZoom = Math.min(Math.max(0.2, prevZoom + zoomDelta), 15);
+                    
+                    const rect = screenEl.getBoundingClientRect();
+                    const mouseX = (e.clientX - rect.left) / hwScale;
+                    const mouseY = (e.clientY - rect.top) / hwScale;
+
+                    panState.current.offsetX = mouseX - (mouseX - panState.current.offsetX) * (newZoom / prevZoom);
+                    panState.current.offsetY = mouseY - (mouseY - panState.current.offsetY) * (newZoom / prevZoom);
+                    panState.current.zoom = newZoom;
+                    updateGrid();
+                };
+
+                screenEl.addEventListener('mousedown', handleMouseDown);
+                window.addEventListener('mousemove', handleMouseMove);
+                window.addEventListener('mouseup', handleMouseUp);
+                screenEl.addEventListener('wheel', handleWheel, { passive: false });
+
+                const preventTouch = (e) => { if (!e.target.closest('.thumb-box')) e.preventDefault(); };
+                document.addEventListener('touchmove', preventTouch, { passive: false });
+
+                return () => {
+                    screenEl.removeEventListener('mousedown', handleMouseDown);
+                    window.removeEventListener('mousemove', handleMouseMove);
+                    window.removeEventListener('mouseup', handleMouseUp);
+                    screenEl.removeEventListener('wheel', handleWheel);
+                    document.removeEventListener('touchmove', preventTouch);
+                };
+            }, [updateGrid]);
+
+            useEffect(() => {
+                const handleScaling = () => {
+                    const wrapper = document.getElementById('device-wrapper');
+                    if(!wrapper) return;
+                    
+                    const winW = window.innerWidth;
+                    const winH = window.innerHeight;
+                    
+                    const deviceW = 454; 
+                    const deviceH = 956; 
+                    
+                    const paddingX = 40; 
+                    const paddingY = 60;
+                    
+                    const scaleW = (winW - paddingX) / deviceW;
+                    const scaleH = (winH - paddingY) / deviceH;
+                    
+                    const targetScale = Math.min(scaleW, scaleH, 1);
+                    wrapper.style.transform = `scale(${targetScale})`;
+                };
+                handleScaling();
+                window.addEventListener('resize', handleScaling);
+                return () => window.removeEventListener('resize', handleScaling);
+            }, []);
+
+            return (
+                <div className="canvas-root">
+                    <style>{`
+                        :root {
+                            --iphone-w: 430px; --iphone-h: 932px; --bezel: 12px; --radius: 55px;
+                            --island-w: 125px; --island-h: 37px; --island-top: 11px;
+                            --grid-size: 10px; --grid-color: rgba(0, 0, 0, 0.08);
+                            --frame-color: #1c1c1e; --button-color: #2c2c2e;
+                        }
+                        .canvas-root {
+                            background-color: #0a0a0a; display: flex; flex-direction: column; justify-content: center;
+                            align-items: center; height: 100dvh; width: 100vw; margin: 0;
+                            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            color: white; overflow: hidden; touch-action: none;
+                            -webkit-user-select: none; user-select: none;
+                        }
+                        .device-wrapper {
+                            position: relative; transform-origin: center; display: flex; justify-content: center;
+                            align-items: center; padding: 40px; transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+                        }
+                        .physical-button { position: absolute; background: var(--button-color); border-radius: 2px; z-index: -1; }
+                        .power-btn { right: 32px; top: 220px; width: 4px; height: 90px; border-radius: 0 4px 4px 0; }
+                        .mute-btn { left: 32px; top: 130px; width: 4px; height: 35px; border-radius: 4px 0 0 4px; }
+                        .vol-up { left: 32px; top: 190px; width: 4px; height: 60px; border-radius: 4px 0 0 4px; }
+                        .vol-down { left: 32px; top: 265px; width: 4px; height: 60px; border-radius: 4px 0 0 4px; }
+                        .device-frame {
+                            width: calc(var(--iphone-w) + (var(--bezel) * 2)); height: calc(var(--iphone-h) + (var(--bezel) * 2));
+                            background: var(--frame-color); border-radius: var(--radius); padding: var(--bezel);
+                            position: relative; box-shadow: 0 0 0 1px #333, inset 0 0 2px rgba(255,255,255,0.2), 0 50px 100px rgba(0,0,0,0.9);
+                        }
+                        .screen {
+                            width: var(--iphone-w); height: var(--iphone-h); background: #ffffff;
+                            border-radius: calc(var(--radius) - var(--bezel)); position: relative; overflow: hidden;
+                            display: flex; flex-direction: column; box-shadow: inset 0 0 4px rgba(0,0,0,0.1);
+                        }
+                        .pixel-grid-bg {
+                            position: absolute; inset: 0;
+                            background-image: linear-gradient(to right, var(--grid-color) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+                            background-size: calc(var(--grid-size) * var(--zoom, 1)) calc(var(--grid-size) * var(--zoom, 1));
+                            background-position: var(--offset-x, 0px) var(--offset-y, 0px); z-index: 1; cursor: grab;
+                        }
+                        .dynamic-island {
+                            position: absolute; top: var(--island-top); left: 50%; transform: translateX(-50%);
+                            width: var(--island-w); height: var(--island-h); background: #000; border-radius: 20px;
+                            z-index: 100; box-shadow: 0 0 0 5px #000, 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+                        }
+                        .thumb-zone {
+                            position: absolute; top: 60%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 12px; z-index: 50; 
+                        }
+                        .thumb-left { left: 10px; }
+                        .thumb-right { right: 10px; }
+                        .thumb-box {
+                            width: 48px; height: 48px; background: rgba(0, 0, 0, 0.05); border: 2px solid rgba(0, 0, 0, 0.15);
+                            border-radius: 12px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+                            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, box-shadow 0.2s;
+                            cursor: pointer; display: flex; justify-content: center; align-items: center; position: relative; z-index: 2; 
+                            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+                        }
+                        .top-zone { position: absolute; top: 13px; display: flex; gap: 8px; z-index: 50; }
+                        .top-zone-left { left: 16px; }
+                        .top-zone-right { right: 16px; }
+                        .top-box {
+                            width: 32px; height: 32px; background: rgba(0, 0, 0, 0.05); border: 1px solid rgba(0, 0, 0, 0.15);
+                            border-radius: 50%; backdrop-filter: blur(4px); cursor: pointer; display: flex; justify-content: center;
+                            align-items: center; transition: all 0.15s ease; box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.2);
+                        }
+                        .top-box:active { transform: scale(0.9); background: rgba(0, 0, 0, 0.15); }
+                        .top-box .box-num { font-size: 12px; }
+                        .bottom-dock {
+                            position: absolute; bottom: 10px; left: 10px; right: 10px; height: 80px; background: rgba(0, 0, 0, 0.05);
+                            backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 2px solid rgba(0, 0, 0, 0.15);
+                            border-radius: 40px; z-index: 60; display: flex; justify-content: center; align-items: center; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+                        }
+                        .box-num { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 18px; font-weight: 700; color: rgba(0, 0, 0, 0.4); pointer-events: none; transition: font-size 0.2s ease; }
+                        .status-info { font-family: monospace; font-size: 9px; color: rgba(0, 0, 0, 0.4); letter-spacing: 1px; pointer-events: none; }
+                        
+                        .tool-ring {
+                            position: absolute; width: 308px; height: 308px; border-radius: 50%; opacity: 0; pointer-events: none; z-index: 1; 
+                            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease, scale 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                            transform: translate(-50%, -50%) rotate(var(--ring-rot, 0deg)) scale(0.6);
+                        }
+                        .thumb-left .tool-ring { left: -10px; top: 84px; }
+                        .thumb-zone.show-ring .tool-ring { opacity: 1; transform: translate(-50%, -50%) rotate(var(--ring-rot, 0deg)) scale(1); }
+                        .thumb-left .thumb-box.is-held {
+                            background: #2c2c2e; border-color: rgba(255, 255, 255, 0.2); 
+                            transform: translateX(96px) scale(var(--held-scale, 1)) !important; 
+                            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+                            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+                        }
+                        .thumb-box.is-returning {
+                            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+                        }
+                        .thumb-box.swap-flash { background: #3b82f6 !important; border-color: #60a5fa !important; box-shadow: 0 0 20px rgba(59, 130, 246, 0.8) !important; transition: none !important; }
+                        .ring-item {
+                            position: absolute; width: 48px; height: 48px; left: 50%; top: 50%; margin-left: -24px; margin-top: -24px;
+                            background: #1c1c1e; border: 2px solid rgba(255, 255, 255, 0.15); border-radius: 12px; display: flex; justify-content: center; align-items: center;
+                            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease-out;
+                        }
+                        .thumb-left .ring-item { transform: rotate(var(--a)) translateX(130px) rotate(calc(var(--a) * -1 - var(--ring-rot, 0deg))); }
+                        .ring-item .box-num { color: rgba(255, 255, 255, 0.5); font-size: 14px; }
+
+            /* ZONA DERECHA: PALETA Y ACCIONES */
+            
+            /* CAJA 5 ACTIVA: TINTED GLOW Y SOMBRAS BASADAS EN SU COLOR ACTIVO */
+            .thumb-box.is-color-tool {
+                background: var(--active-color) !important;
+                border-radius: 12px !important;
+                border: 2px solid rgba(255, 255, 255, 0.4) !important; 
+                box-shadow: 0 15px 35px -5px color-mix(in srgb, var(--active-color) 70%, transparent), 
+                            inset 0 2px 4px rgba(255,255,255,0.4) !important;
+                transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s ease, box-shadow 0.2s ease !important;
+            }
+            .thumb-box.is-color-tool .box-num { display: none; }
+            
+            .thumb-right .thumb-box.is-held {
+                transform: translateX(-160px) scale(1.05) !important; 
+                box-shadow: 0 35px 65px -10px color-mix(in srgb, var(--button-color) 95%, transparent), 
+                            0 15px 25px -5px color-mix(in srgb, var(--button-color) 70%, transparent) !important;
+                z-index: 100;
+            }
+            
+            .thumb-right .thumb-box.is-color-tool.is-color-mode {
+                background: transparent !important; border-color: transparent !important; box-shadow: none !important;
+            }
+            
+            .thumb-right .thumb-box.is-action-drag {
+                transform: translateX(calc(-96px + var(--drag-x, 0px))) scale(1.05) !important;
+                transition: transform 0.1s linear, background 0.2s, box-shadow 0.2s;
+                box-shadow: 0 35px 65px -10px color-mix(in srgb, var(--button-color) 95%, transparent), 
+                            0 15px 25px -5px color-mix(in srgb, var(--button-color) 70%, transparent) !important;
+            }
+
+            .color-panel {
+                            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 48px; height: 48px; border-radius: 12px;
+                            background: transparent; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                            display: flex; justify-content: center; align-items: center; z-index: 10;
+                            pointer-events: none; 
+                        }
+                        .thumb-right .thumb-box.is-held .color-panel {
+                            background: #2c2c2e; border: 2px solid rgba(255, 255, 255, 0.2);
+                            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+                        }
+                        
+                        /* ACTUALIZACIÓN: Panel escalado para 4x5 swatches */
+                        .color-panel.is-expanded {
+                            width: 180px; height: 220px; border-radius: 12px; background: #2c2c2e; padding: 12px;
+                            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(5, 1fr); 
+                            grid-auto-flow: column; gap: 8px;
+                        }
+                        
+                        .color-swatch {
+                            border-radius: 4px; background: var(--swatch); opacity: 0; transform: scale(0.5);
+                            transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), outline 0.15s ease, opacity 0.2s ease; 
+                            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3); width: 100%; height: 100%; box-sizing: border-box;
+                            outline: 0px solid white; outline-offset: 0px;
+                        }
+                        .color-panel.is-expanded .color-swatch { opacity: 1; transform: scale(1); pointer-events: auto; }
+                        
+                        .color-swatch.is-hovered {
+                            transform: scale(1.2) !important;
+                            outline: 2px solid white;
+                            outline-offset: 2px;
+                            z-index: 20;
+                        }
+                    `}</style>
+
+                    <div className="device-wrapper" id="device-wrapper">
+                        <div className="physical-button mute-btn"></div>
+                        <div className="physical-button vol-up"></div>
+                        <div className="physical-button vol-down"></div>
+                        <div className="physical-button power-btn"></div>
+
+                        <div className="device-frame">
+                            <div className="screen" ref={screenRef}>
+                                <div className="pixel-grid-bg" ref={canvasRef}></div>
+                                
+                                <div className="top-zone top-zone-left">
+                                    <div className="top-box"><span className="box-num">A</span></div>
+                                    <div className="top-box"><span className="box-num">B</span></div>
+                                    <div className="top-box"><span className="box-num">C</span></div>
+                                </div>
+
+                                <div className="top-zone top-zone-right">
+                                    <div className="top-box"><span className="box-num">D</span></div>
+                                    <div className="top-box"><span className="box-num">E</span></div>
+                                    <div className="top-box"><span className="box-num">F</span></div>
+                                </div>
+
+                                <ThumbZoneLeft initialBoxes={INITIAL_LEFT_BOXES} initialRing={INITIAL_LEFT_RING} />
+                                <ThumbZoneRight initialBoxes={INITIAL_RIGHT_BOXES} />
+
+                                <div className="dynamic-island"></div>
+                                
+                                <div className="bottom-dock">
+                                    <div className="status-info">IPHONE 14 PRO MAX PRECISION CANVAS (REACT)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

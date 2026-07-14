@@ -1,0 +1,163 @@
+import React, { useEffect, useRef, useState } from "react";
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+const easeInOutCubic = (t) =>
+  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+const interpolatePoints = (from, to, t) =>
+  from.map(([x1, y1], i) => {
+    const [x2, y2] = to[i];
+    return [lerp(x1, x2, t), lerp(y1, y2, t)];
+  });
+
+const pointsToPath = (pts) =>
+  pts.map(([x, y], i) => `${i === 0 ? "M" : "L"} ${x} ${y}`).join(" ") + " Z";
+
+const pointsToLine = (pts) =>
+  pts.map(([x, y], i) => `${i === 0 ? "M" : "L"} ${x} ${y}`).join(" ");
+
+const TOP_3D = [[200,210],[286.6,160],[200,110],[113.4,160]];
+const LEFT_3D = [[200,210],[113.4,160],[113.4,260],[200,310]];
+const RIGHT_3D = [[200,210],[286.6,160],[286.6,260],[200,310]];
+
+const TOP_2D = [[200,286.6],[286.6,200],[200,113.4],[113.4,200]];
+const LEFT_2D = [[200,286.6],[113.4,200],[113.4,200],[200,286.6]];
+const RIGHT_2D = [[200,286.6],[286.6,200],[286.6,200],[200,286.6]];
+
+const HL1_3D = [[200,210],[113.4,160]];
+const HL2_3D = [[200,210],[286.6,160]];
+const HL3_3D = [[200,210],[200,310]];
+
+const HL1_2D = [[200,286.6],[113.4,200]];
+const HL2_2D = [[200,286.6],[286.6,200]];
+const HL3_2D = [[200,286.6],[200,286.6]];
+
+export default function App() {
+  const [isTopView, setIsTopView] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const rafRef = useRef(null);
+  const progressRef = useRef(0);
+  const hasInteractedRef = useRef(false);
+
+  const animateTo = (target) => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+
+    const from = progressRef.current;
+    const duration = 760;
+    const start = performance.now();
+
+    const tick = (now) => {
+      const raw = clamp((now - start) / duration, 0, 1);
+      const t = easeInOutCubic(raw);
+      const value = lerp(from, target, t);
+
+      progressRef.current = value;
+      setProgress(value);
+
+      if (raw < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  const toggle = () => {
+    hasInteractedRef.current = true;
+    setIsTopView((p) => !p);
+  };
+
+  useEffect(() => {
+    if (!hasInteractedRef.current) return;
+    animateTo(isTopView ? 1 : 0);
+    return () => rafRef.current && cancelAnimationFrame(rafRef.current);
+  }, [isTopView]);
+
+  const geo = clamp(progress, 0, 1);
+
+  const topPath = pointsToPath(interpolatePoints(TOP_3D, TOP_2D, geo));
+  const leftPath = pointsToPath(interpolatePoints(LEFT_3D, LEFT_2D, geo));
+  const rightPath = pointsToPath(interpolatePoints(RIGHT_3D, RIGHT_2D, geo));
+
+  const delay = clamp(geo - 0.06, 0, 1);
+  const hl1 = pointsToLine(interpolatePoints(HL1_3D, HL1_2D, delay));
+  const hl2 = pointsToLine(interpolatePoints(HL2_3D, HL2_2D, delay));
+  const hl3 = pointsToLine(interpolatePoints(HL3_3D, HL3_2D, delay));
+
+  const pulse = Math.sin(geo * Math.PI * 2);
+  const breathing = 1 + Math.sin(performance.now() * 0.002) * 0.01; // micro respiración visual
+
+  const iconScale = lerp(1, 1.08, geo) * breathing;
+  const iconTiltX = lerp(0, 0.03, geo) + pulse * 0.01;
+  const iconTiltY = lerp(0, -0.04, geo);
+
+  const ghostOffsets = [
+    { dx: -10, dy: 8, opacity: 0.10 },
+    { dx: -5, dy: 4, opacity: 0.16 },
+    { dx: 6, dy: -4, opacity: 0.12 },
+  ];
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-white">
+      <div onClick={toggle} className="cursor-pointer select-none">
+        <svg
+          viewBox="0 0 400 400"
+          className="w-80 h-80"
+          style={{
+            transform: `scale(${iconScale}) rotateX(${iconTiltX}rad) rotateY(${iconTiltY}rad)`,
+            transformOrigin: "center",
+            willChange: "transform",
+          }}
+        >
+          <defs>
+            <linearGradient id="topFace" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#65e6d6" />
+              <stop offset="100%" stopColor="#2aa39a" />
+            </linearGradient>
+
+            <linearGradient id="leftFace" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#245b5f" />
+              <stop offset="100%" stopColor="#193f42" />
+            </linearGradient>
+
+            <linearGradient id="rightFace" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#2aa39a" />
+              <stop offset="100%" stopColor="#245b5f" />
+            </linearGradient>
+
+            <radialGradient id="energyGlow" cx="50%" cy="45%" r="50%">
+              <stop offset="0%" stopColor="#7ff3e6" stopOpacity="0.28" />
+              <stop offset="60%" stopColor="#7ff3e6" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="#7ff3e6" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+
+          {/* Capa 4D: ecos temporales */}
+          {ghostOffsets.map((g, i) => (
+            <g key={i} opacity={g.opacity}>
+              <g transform={`translate(${g.dx}, ${g.dy})`}>
+                <path d={leftPath} fill="url(#leftFace)" />
+                <path d={rightPath} fill="url(#rightFace)" />
+                <path d={topPath} fill="url(#topFace)" />
+              </g>
+            </g>
+          ))}
+
+          {/* Campo de energía */}
+          <circle cx="200" cy="200" r="112" fill="url(#energyGlow)" />
+
+          {/* Núcleo principal */}
+          <g>
+            <path d={leftPath} fill="url(#leftFace)" />
+            <path d={rightPath} fill="url(#rightFace)" />
+            <path d={topPath} fill="url(#topFace)" />
+
+            <path d={hl1} stroke="rgba(255,255,255,0.34)" strokeWidth={1.2} fill="none" />
+            <path d={hl2} stroke="rgba(255,255,255,0.22)" strokeWidth={1.2} fill="none" />
+            <path d={hl3} stroke="rgba(0,0,0,0.16)" strokeWidth={1.2} fill="none" />
+          </g>
+        </svg>
+      </div>
+    </div>
+  );
+}

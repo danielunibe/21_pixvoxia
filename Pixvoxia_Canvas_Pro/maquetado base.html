@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>iPhone 14 Pro Max - Precision Canvas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --iphone-w: 430px;
+        --iphone-h: 932px;
+        --bezel: 12px;
+        --radius: 55px;
+        --island-w: 125px;
+        --island-h: 37px;
+        --island-top: 11px;
+        --grid-size: 10px;
+        --grid-color: rgba(0, 0, 0, 0.08);
+        --frame-color: #1c1c1e;
+        --button-color: #2c2c2e;
+        --zoom: 1;
+        --offset-x: 0px;
+        --offset-y: 0px;
+      }
+
+      body {
+        background-color: #0a0a0a;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        color: white;
+        overflow: hidden;
+        touch-action: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+
+      .device-wrapper {
+        position: relative;
+        transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 40px;
+      }
+
+      .physical-button {
+        position: absolute;
+        background: var(--button-color);
+        border-radius: 2px;
+        z-index: -1;
+      }
+      .power-btn {
+        right: 32px;
+        top: 220px;
+        width: 4px;
+        height: 90px;
+        border-radius: 0 4px 4px 0;
+      }
+      .mute-btn {
+        left: 32px;
+        top: 130px;
+        width: 4px;
+        height: 35px;
+        border-radius: 4px 0 0 4px;
+      }
+      .vol-up {
+        left: 32px;
+        top: 190px;
+        width: 4px;
+        height: 60px;
+        border-radius: 4px 0 0 4px;
+      }
+      .vol-down {
+        left: 32px;
+        top: 265px;
+        width: 4px;
+        height: 60px;
+        border-radius: 4px 0 0 4px;
+      }
+
+      .device-frame {
+        width: calc(var(--iphone-w) + (var(--bezel) * 2));
+        height: calc(var(--iphone-h) + (var(--bezel) * 2));
+        background: var(--frame-color);
+        border-radius: var(--radius);
+        padding: var(--bezel);
+        position: relative;
+        box-shadow:
+          0 0 0 1px #333,
+          inset 0 0 2px rgba(255, 255, 255, 0.2),
+          0 50px 100px rgba(0, 0, 0, 0.9);
+      }
+
+      .screen {
+        width: var(--iphone-w);
+        height: var(--iphone-h);
+        background: #ffffff;
+        border-radius: calc(var(--radius) - var(--bezel));
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .pixel-grid-bg {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+          linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+        background-size: calc(var(--grid-size) * var(--zoom))
+          calc(var(--grid-size) * var(--zoom));
+        background-position: var(--offset-x) var(--offset-y);
+        z-index: 1;
+        cursor: grab;
+      }
+      .pixel-grid-bg:active {
+        cursor: grabbing;
+      }
+
+      .dynamic-island {
+        position: absolute;
+        top: var(--island-top);
+        left: 50%;
+        transform: translateX(-50%);
+        width: var(--island-w);
+        height: var(--island-h);
+        background: rgba(0, 0, 0, 0.85);
+        border-radius: 20px;
+        z-index: 100;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+        transition: all 0.45s cubic-bezier(0.2, 1, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        overflow: hidden;
+        cursor: pointer;
+        padding: 5px;
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+      }
+
+      .dynamic-island.expanded {
+        width: 320px;
+        height: 520px;
+        border-radius: 40px;
+        top: 15px;
+        background: rgba(0, 0, 0, 0.92);
+      }
+
+      .island-border {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        padding: 4px;
+        background: conic-gradient(
+          from 0deg,
+          #ff2d55 0%, #ff9500 15%, #ffcc00 30%, #4cd964 45%, 
+          #5ac8fa 60%, #007aff 75%, #5856d6 90%, #ff2d55 100%
+        );
+        mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        mask-composite: exclude;
+        -webkit-mask-composite: xor;
+        pointer-events: none;
+      }
+
+      .pantone-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 20px;
+        width: 100%;
+        opacity: 0;
+        transform: scale(0.95) translateY(10px);
+        transition: all 0.4s ease-out;
+        pointer-events: none;
+        margin-top: 25px;
+        overflow-y: auto;
+        max-height: 450px;
+      }
+
+      .dynamic-island.expanded .pantone-grid {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        pointer-events: auto;
+      }
+
+      /* Estética Industrial de Tarjeta Pantone */
+      .pantone-swatch {
+        min-height: 85px;
+        border-radius: 12px;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      }
+
+      .pantone-swatch:hover {
+        transform: scale(1.03) rotate(-1deg);
+      }
+
+      .swatch-color {
+        flex-grow: 1;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+      }
+
+      .swatch-info {
+        height: 35px;
+        background: #ffffff;
+        color: #000;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 10px;
+      }
+
+      .swatch-name {
+        font-size: 11px;
+        font-weight: 800;
+        font-family: 'Courier New', Courier, monospace;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+
+      .swatch-code {
+        font-size: 7px;
+        color: #666;
+        font-family: 'Courier New', Courier, monospace;
+      }
+
+      .thumb-zone {
+        position: absolute;
+        top: 60%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        z-index: 50;
+      }
+
+      .thumb-left {
+        left: 10px;
+      }
+      .thumb-right {
+        right: 10px;
+      }
+
+      .thumb-box {
+        width: 48px;
+        height: 48px;
+        background: rgba(0, 0, 0, 0.05);
+        border: 2px solid rgba(0, 0, 0, 0.15);
+        border-radius: 12px;
+        backdrop-filter: blur(4px);
+        /* Transición acelerada para el salto de escala (Jump) */
+        transition:
+          all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+          transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        z-index: 2;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      }
+
+      .top-zone {
+        position: absolute;
+        top: 13px;
+        display: flex;
+        gap: 8px;
+        z-index: 50;
+      }
+      .top-zone-left {
+        left: 16px;
+      }
+      .top-zone-right {
+        right: 16px;
+      }
+
+      .top-box {
+        width: 32px;
+        height: 32px;
+        background: rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        border-radius: 50%;
+        backdrop-filter: blur(4px);
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: all 0.15s ease;
+        box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.2);
+      }
+      .top-box:active {
+        transform: scale(0.9);
+        background: rgba(0, 0, 0, 0.15);
+      }
+      .top-box .box-num {
+        font-size: 12px;
+      }
+
+      .bottom-dock {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        right: 10px;
+        height: 80px;
+        background: rgba(0, 0, 0, 0.05);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        border: 2px solid rgba(0, 0, 0, 0.15);
+        border-radius: 40px;
+        z-index: 60;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      }
+
+      .box-num {
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 18px;
+        font-weight: 700;
+        color: rgba(0, 0, 0, 0.4);
+        pointer-events: none;
+        transition: opacity 0.2s;
+      }
+
+      .status-info {
+        font-family: monospace;
+        font-size: 9px;
+        color: rgba(0, 0, 0, 0.4);
+        letter-spacing: 1px;
+        pointer-events: none;
+      }
+
+      .tool-ring {
+        position: absolute;
+        width: 308px;
+        height: 308px;
+        border-radius: 50%;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 1;
+        transition:
+          transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+          opacity 0.2s ease;
+      }
+
+      .thumb-left .tool-ring {
+        left: -10px;
+        top: 84px;
+        transform: translate(-50%, -50%) rotate(var(--ring-rot, 0deg));
+      }
+
+      .thumb-right .tool-ring {
+        right: -10px;
+        top: 84px;
+        transform: translate(50%, -50%) rotate(var(--ring-rot, 0deg));
+      }
+
+      .thumb-zone.show-ring .tool-ring {
+        opacity: 1;
+      }
+
+      /* La caja original se mantiene sólida y opaca 100% como visor de datos */
+      .thumb-left .thumb-box.is-held {
+        background: #2c2c2e;
+        border-color: rgba(255, 255, 255, 0.2);
+        transform: translateX(96px) scale(var(--held-scale, 1));
+        box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+      }
+
+      .thumb-right .thumb-box.is-held {
+        background: #2c2c2e;
+        border-color: rgba(255, 255, 255, 0.2);
+        transform: translateX(-96px) scale(var(--held-scale, 1));
+        box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+      }
+
+      .thumb-box.swap-flash {
+        background: #3b82f6 !important;
+        border-color: #60a5fa !important;
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.8) !important;
+        transition: none !important;
+      }
+
+      .ring-item {
+        position: absolute;
+        width: 48px;
+        height: 48px;
+        left: 50%;
+        top: 50%;
+        margin-left: -24px;
+        margin-top: -24px;
+        background: #1c1c1e;
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        transition:
+          transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+          opacity 0.15s ease-out;
+      }
+
+      .thumb-left .ring-item {
+        transform: rotate(var(--a)) translateX(130px)
+          rotate(calc(var(--a) * -1 - var(--ring-rot, 0deg)));
+      }
+      .thumb-right .ring-item {
+        transform: rotate(var(--a)) translateX(-130px)
+          rotate(calc(var(--a) * -1 - var(--ring-rot, 0deg)));
+      }
+
+      .ring-item .box-num {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 14px;
+        opacity: 1;
+      }
+
+      .screen.thumbs-dismissed .thumb-left .thumb-box {
+        transform: scale(0.8) translateX(-150px) !important;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.4s cubic-bezier(0.6, -0.28, 0.735, 0.045) !important;
+      }
+      .screen.thumbs-dismissed .thumb-right .thumb-box {
+        transform: scale(0.8) translateX(150px) !important;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.4s cubic-bezier(0.6, -0.28, 0.735, 0.045) !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="device-wrapper" id="scaler">
+      <div class="physical-button mute-btn"></div>
+      <div class="physical-button vol-up"></div>
+      <div class="physical-button vol-down"></div>
+      <div class="physical-button power-btn"></div>
+
+      <div class="device-frame">
+        <div class="screen">
+          <div class="pixel-grid-bg"></div>
+
+          <div class="top-zone top-zone-left">
+            <div class="top-box"><span class="box-num">A</span></div>
+            <div class="top-box"><span class="box-num">B</span></div>
+            <div class="top-box"><span class="box-num">C</span></div>
+          </div>
+
+          <div class="top-zone top-zone-right">
+            <div class="top-box"><span class="box-num">D</span></div>
+            <div class="top-box"><span class="box-num">E</span></div>
+            <div class="top-box"><span class="box-num">F</span></div>
+          </div>
+
+          <div class="thumb-zone thumb-left">
+            <div class="thumb-box"><span class="box-num">1</span></div>
+            <div class="thumb-box"><span class="box-num">2</span></div>
+            <div class="thumb-box"><span class="box-num">3</span></div>
+            <div class="tool-ring">
+              <div class="ring-item" style="--a: -100deg" data-angle="-100">
+                <span class="box-num">T1</span>
+              </div>
+              <div class="ring-item" style="--a: -75deg" data-angle="-75">
+                <span class="box-num">T2</span>
+              </div>
+              <div class="ring-item" style="--a: -50deg" data-angle="-50">
+                <span class="box-num">T3</span>
+              </div>
+              <div class="ring-item" style="--a: -25deg" data-angle="-25">
+                <span class="box-num">T4</span>
+              </div>
+              <!-- Slot cero estricto de transferencia (oculto visualmente) -->
+              <div class="ring-item" style="--a: 0deg" data-angle="0">
+                <span class="box-num"></span>
+              </div>
+              <div class="ring-item" style="--a: 25deg" data-angle="25">
+                <span class="box-num">T5</span>
+              </div>
+              <div class="ring-item" style="--a: 50deg" data-angle="50">
+                <span class="box-num">T6</span>
+              </div>
+              <div class="ring-item" style="--a: 75deg" data-angle="75">
+                <span class="box-num">T7</span>
+              </div>
+              <div class="ring-item" style="--a: 100deg" data-angle="100">
+                <span class="box-num">T8</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="thumb-zone thumb-right">
+            <div class="thumb-box"><span class="box-num">4</span></div>
+            <div class="thumb-box"><span class="box-num">5</span></div>
+            <div class="thumb-box"><span class="box-num">6</span></div>
+            <div class="tool-ring">
+              <div class="ring-item" style="--a: -100deg" data-angle="-100">
+                <span class="box-num">T9</span>
+              </div>
+              <div class="ring-item" style="--a: -75deg" data-angle="-75">
+                <span class="box-num">T10</span>
+              </div>
+              <div class="ring-item" style="--a: -50deg" data-angle="-50">
+                <span class="box-num">T11</span>
+              </div>
+              <div class="ring-item" style="--a: -25deg" data-angle="-25">
+                <span class="box-num">T12</span>
+              </div>
+              <!-- Slot cero estricto de transferencia (oculto visualmente) -->
+              <div class="ring-item" style="--a: 0deg" data-angle="0">
+                <span class="box-num"></span>
+              </div>
+              <div class="ring-item" style="--a: 25deg" data-angle="25">
+                <span class="box-num">T13</span>
+              </div>
+              <div class="ring-item" style="--a: 50deg" data-angle="50">
+                <span class="box-num">T14</span>
+              </div>
+              <div class="ring-item" style="--a: 75deg" data-angle="75">
+                <span class="box-num">T15</span>
+              </div>
+              <div class="ring-item" style="--a: 100deg" data-angle="100">
+                <span class="box-num">T16</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dynamic-island" id="island">
+            <div class="island-border"></div>
+            <div class="pantone-grid" id="pantoneGrid">
+              <!-- Se generará vía JS -->
+            </div>
+          </div>
+
+          <div class="bottom-dock">
+            <div class="status-info">IPHONE 14 PRO MAX PRECISION CANVAS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const island = document.getElementById("island");
+      const pantoneGrid = document.getElementById("pantoneGrid");
+      let islandTimer;
+
+      const pantones = [
+        { name: "PANTONE 18-1664", code: "Flame Scarlet", color: "#E03C31" },
+        { name: "PANTONE 15-1247", code: "Tangerine", color: "#FFB347" },
+        { name: "PANTONE 13-0647", code: "Illuminating", color: "#F5DF4D" },
+        { name: "PANTONE 19-4052", code: "Classic Blue", color: "#0F4C81" },
+        { name: "PANTONE 17-5104", code: "Ultimate Gray", color: "#939597" },
+        { name: "PANTONE 16-1546", code: "Living Coral", color: "#FF6F61" },
+        { name: "PANTONE 18-3838", code: "Ultra Violet", color: "#5F4B8B" },
+        { name: "PANTONE 15-0343", code: "Greenery", color: "#88B04B" },
+      ];
+
+      // Generar tarjetas Pantone Estilo Industrial
+      pantones.forEach((p) => {
+        const swatch = document.createElement("div");
+        swatch.className = "pantone-swatch";
+        swatch.innerHTML = `
+          <div class="swatch-color" style="background: ${p.color}"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">${p.name}</div>
+            <div class="swatch-code">${p.code}</div>
+          </div>
+        `;
+        swatch.onclick = (e) => {
+          e.stopPropagation();
+          console.log(`Pivoxia Color Sync: ${p.name}`);
+          island.classList.remove("expanded");
+        };
+        pantoneGrid.appendChild(swatch);
+      });
+
+      island.addEventListener("pointerdown", (e) => {
+        islandTimer = setTimeout(() => {
+          island.classList.add("expanded");
+        }, 500); // 500ms para el click sostenido
+      });
+
+      window.addEventListener("pointerup", () => {
+        clearTimeout(islandTimer);
+      });
+
+      const scaler = document.getElementById("scaler");
+
+      function fitToScreen() {
+        const windowH = window.innerHeight;
+        const deviceH = 1012;
+        const padding = 60;
+        const targetScale = Math.min((windowH - padding) / deviceH, 1);
+        scaler.style.transform = `scale(${targetScale})`;
+        scaler.dataset.scale = targetScale;
+      }
+
+      window.onload = fitToScreen;
+      window.onresize = fitToScreen;
+
+      document.addEventListener(
+        "touchmove",
+        (e) => {
+          if (!e.target.closest(".thumb-box")) e.preventDefault();
+        },
+        { passive: false },
+      );
+
+      const thumbBoxes = document.querySelectorAll(".thumb-box");
+      const screenEl = document.querySelector(".screen");
+
+      let activeLeftHolds = 0;
+      let activeRightHolds = 0;
+
+      // Calculador de opacidad paramétrica fija
+      function applyRingOpacities(zone, snapAngle) {
+        zone.querySelectorAll(".ring-item").forEach((item) => {
+          const itemAngle = parseFloat(item.dataset.angle);
+          const absDistance = Math.abs(itemAngle + snapAngle);
+
+          let op = 0;
+          // La regla del 80%, 50%, 25%, 10%
+          if (absDistance === 0)
+            op = 0; // Oculto detrás de la caja nativa
+          else if (absDistance === 25) op = 0.8;
+          else if (absDistance === 50) op = 0.5;
+          else if (absDistance === 75) op = 0.25;
+          else if (absDistance >= 100) op = 0.1;
+
+          item.style.opacity = op;
+        });
+      }
+
+      function evaluateConcurrentHolds() {
+        if (activeLeftHolds > 0 && activeRightHolds > 0) {
+          setTimeout(() => {
+            screenEl.classList.add("thumbs-dismissed");
+            thumbBoxes.forEach((b) => {
+              b.classList.remove("is-held");
+              b.style.setProperty("--held-scale", "1");
+              b.dataset.tracking = "false";
+              const zone = b.closest(".thumb-zone");
+              if (zone) zone.classList.remove("show-ring");
+            });
+          }, 200);
+        }
+      }
+
+      thumbBoxes.forEach((box) => {
+        box.addEventListener("pointerdown", (e) => {
+          if (screenEl.classList.contains("thumbs-dismissed")) return;
+
+          const zone = box.closest(".thumb-zone");
+          if (zone.dataset.isSwapping === "true") return;
+
+          const isLeftZone = zone.classList.contains("thumb-left");
+          const boxes = Array.from(zone.querySelectorAll(".thumb-box"));
+          const index = boxes.indexOf(box);
+
+          if (index === 1) {
+            // Almacenamos el contenido original de la caja
+            e.target.dataset.originalHTML = e.target.innerHTML;
+
+            // Inyectamos el contenido al nodo fantasma 0deg del anillo
+            const centerSlot = zone.querySelector('.ring-item[data-angle="0"]');
+            if (centerSlot) centerSlot.innerHTML = e.target.innerHTML;
+
+            e.target.setPointerCapture(e.pointerId);
+            e.target.classList.add("is-held");
+
+            e.target.dataset.tracking = "true";
+            e.target.dataset.startY = e.clientY;
+            e.target.dataset.lastSnap = "0";
+            zone.style.setProperty("--ring-rot", `0deg`);
+
+            // Renderizar opacidades en reposo
+            applyRingOpacities(zone, 0);
+
+            if (isLeftZone) activeLeftHolds++;
+            else activeRightHolds++;
+
+            evaluateConcurrentHolds();
+          } else {
+            zone.dataset.isSwapping = "true";
+            const midBox = boxes[1];
+            const dist = 60;
+
+            box.style.transform =
+              index === 0 ? `translateY(${dist}px)` : `translateY(-${dist}px)`;
+            midBox.style.transform =
+              index === 0 ? `translateY(-${dist}px)` : `translateY(${dist}px)`;
+
+            setTimeout(() => {
+              box.style.transition = "none";
+              midBox.style.transition = "none";
+              box.style.transform = "";
+              midBox.style.transform = "";
+
+              zone.insertBefore(
+                index === 0 ? midBox : box,
+                index === 0 ? box : midBox,
+              );
+
+              void box.offsetHeight;
+              box.style.transition = "";
+              midBox.style.transition = "";
+
+              zone.dataset.isSwapping = "false";
+            }, 200);
+          }
+        });
+
+        box.addEventListener("pointermove", (e) => {
+          if (box.dataset.tracking === "true") {
+            const startY = parseFloat(box.dataset.startY);
+            const deltaY = e.clientY - startY;
+            const zone = box.closest(".thumb-zone");
+
+            if (Math.abs(deltaY) > 10) {
+              zone.classList.add("show-ring");
+
+              let rawRot = deltaY * 0.8;
+              let snapAngle = Math.round(rawRot / 25) * 25;
+              snapAngle = Math.max(-100, Math.min(100, snapAngle));
+
+              if (box.dataset.lastSnap !== snapAngle.toString()) {
+                box.dataset.lastSnap = snapAngle;
+                zone.style.setProperty("--ring-rot", `${snapAngle}deg`);
+
+                // Live-Swap: Actualiza la caja NATIVA en tiempo real
+                const targetItemAngle = -snapAngle;
+                const targetItem = zone.querySelector(
+                  `.ring-item[data-angle="${targetItemAngle}"]`,
+                );
+                if (targetItem) {
+                  box.innerHTML = targetItem.innerHTML;
+                }
+
+                // Jump mecánico físico de la caja sostenida
+                box.style.setProperty("--held-scale", "1.15");
+                if (navigator.vibrate) navigator.vibrate(10);
+                setTimeout(() => {
+                  if (box.classList.contains("is-held"))
+                    box.style.setProperty("--held-scale", "1");
+                }, 150);
+
+                // Actualiza atenuaciones basadas en posición
+                applyRingOpacities(zone, snapAngle);
+              }
+            }
+          }
+        });
+
+        const handleRelease = (e) => {
+          if (e.target.classList.contains("is-held")) {
+            const zone = e.target.closest(".thumb-zone");
+            const finalSnap = parseInt(e.target.dataset.lastSnap || "0");
+            const originalHTML = e.target.dataset.originalHTML;
+
+            // Si hubo un cambio de selección
+            if (finalSnap !== 0) {
+              const replacedItemAngle = -finalSnap;
+              const selectedNode = zone.querySelector(
+                `.ring-item[data-angle="${replacedItemAngle}"]`,
+              );
+
+              if (selectedNode) {
+                // Transferencia permanente al DOM del anillo para no perder la herramienta original
+                selectedNode.innerHTML = originalHTML;
+
+                e.target.classList.add("swap-flash");
+                setTimeout(() => e.target.classList.remove("swap-flash"), 100);
+              }
+            }
+
+            // Limpieza del nodo de transferencia
+            const centerSlot = zone.querySelector('.ring-item[data-angle="0"]');
+            if (centerSlot) centerSlot.innerHTML = "";
+
+            e.target.classList.remove("is-held");
+            e.target.style.setProperty("--held-scale", "1");
+            zone.classList.remove("show-ring");
+            e.target.dataset.tracking = "false";
+            zone.style.setProperty("--ring-rot", `0deg`);
+
+            const isLeftZone = zone.classList.contains("thumb-left");
+            if (isLeftZone) activeLeftHolds--;
+            else activeRightHolds--;
+
+            try {
+              e.target.releasePointerCapture(e.pointerId);
+            } catch (err) {}
+          }
+        };
+
+        box.addEventListener("pointerup", handleRelease);
+        box.addEventListener("pointercancel", handleRelease);
+      });
+
+      let zoom = 1;
+      let offsetX = 0;
+      let offsetY = 0;
+      let isDragging = false;
+      let startX, startY;
+
+      function updateGrid() {
+        document.documentElement.style.setProperty("--zoom", zoom);
+        document.documentElement.style.setProperty(
+          "--offset-x",
+          `${offsetX}px`,
+        );
+        document.documentElement.style.setProperty(
+          "--offset-y",
+          `${offsetY}px`,
+        );
+      }
+
+      screenEl.addEventListener("mousedown", (e) => {
+        if (
+          e.target.closest(".dynamic-island") ||
+          e.target.closest(".thumb-zone") ||
+          e.target.closest(".top-zone") ||
+          e.target.closest(".bottom-dock")
+        )
+          return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+      });
+
+      window.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        const hwScale = parseFloat(scaler.dataset.scale) || 1;
+        offsetX += (e.clientX - startX) / hwScale;
+        offsetY += (e.clientY - startY) / hwScale;
+        startX = e.clientX;
+        startY = e.clientY;
+        updateGrid();
+      });
+
+      window.addEventListener("mouseup", () => {
+        isDragging = false;
+      });
+
+      screenEl.addEventListener("wheel", (e) => {
+        if (
+          e.target.closest(".dynamic-island") ||
+          e.target.closest(".thumb-zone") ||
+          e.target.closest(".top-zone") ||
+          e.target.closest(".bottom-dock")
+        )
+          return;
+        e.preventDefault();
+        const hwScale = parseFloat(scaler.dataset.scale) || 1;
+        const zoomSensitivity = 0.002;
+        const zoomDelta = -e.deltaY * zoomSensitivity;
+        const newZoom = Math.min(Math.max(0.2, zoom + zoomDelta), 15);
+
+        const rect = screenEl.getBoundingClientRect();
+        const mouseX = (e.clientX - rect.left) / hwScale;
+        const mouseY = (e.clientY - rect.top) / hwScale;
+
+        offsetX = mouseX - (mouseX - offsetX) * (newZoom / zoom);
+        offsetY = mouseY - (mouseY - offsetY) * (newZoom / zoom);
+
+        zoom = newZoom;
+        updateGrid();
+      });
+    </script>
+  </body>
+</html>
